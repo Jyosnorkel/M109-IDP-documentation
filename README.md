@@ -24,9 +24,14 @@ The mission code is in `competition.py`. `main.py` is the power-up entry point; 
 - `libs/tcs3472_micropython/tcs3472.py` reads colour from a TCS3472 sensor.
 - `libs/tiny_code_reader/tiny_code_reader.py` communicates with the tiny code reader.
 
-## To run it
+## Major coding decisions
 
-1. Check that the pins and settings in `config.py` match the robot.
-2. Copy the project Python files and the `libs/` folder to the Pico.
-3. Put the robot at the hub, facing the ramp, and power it on. Press the start button when ready.
-4. Check the route, sensors, pickup, and rack placement on the course, then adjust `config.py` if needed.
+- OOP for maintainability, clarity, and a modular approach.
+- The map is mapped out as a graph, with nodes and links, so the AGV can go from one spot to another.
+- Line following uses simple negative feedback.
+- Motor PWMs are not identical, so we use constant trim to minimise drift.
+- Turns are separated into advance and turn-on points to make them reproducible.
+- Turn and adjustment timings are manually tuned.
+- Hall effect and distance sensor values are interpreted using manual tuning.
+- Turns need reference timings and a tolerance window because the rack lines are closely spaced, so the robot can only try to stop on the middle line within a certain timeframe. This needs tuning.
+
