@@ -15,7 +15,14 @@ The mission code is in `competition.py`. `main.py` is the power-up entry point; 
 - `graphs.py` describes the track and plans routes between bays, racks, and the hub.
 - `hw.py` controls the motors, servos, lights, buttons, and sensors.
 
-The drivers in `libs/` are for the distance, RFID, colour, proximity, and code-reader sensors. The mission uses `libs/VL53L0X/VL53L0X.py` for rack slot checks.
+## Sensor libraries
+
+- `libs/DFRobot_TMF8x01/DFRobot_TMF8x01.py` drives TMF8801 and TMF8701 distance sensors.
+- `libs/VL53L0X/VL53L0X.py` drives the distance sensor used for rack slot checks.
+- `libs/VNCL4010/VNCL4010.py` drives a VCNL4010 proximity sensor.
+- `libs/mfrc522_python/src/mfrc522/MFRC522.py` drives an MFRC522 RFID reader.
+- `libs/tcs3472_micropython/tcs3472.py` reads colour from a TCS3472 sensor.
+- `libs/tiny_code_reader/tiny_code_reader.py` communicates with the tiny code reader.
 
 ## To run it
 
