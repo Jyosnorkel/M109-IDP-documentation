@@ -12,13 +12,16 @@ state = {"pole": None, "holding": False}
 # ---------------- Line following (milestone 2) ------------------------------------------
 class Follower:
     def __init__(self):
+        """Set the follower state before line tracking starts."""
         self.last_side = 0
         self.lost_since = None
 
     def reset(self):
+        """Clear the saved line-tracking state."""
         self.lost_since = None
 
     def step(self, s, k=1.0):
+        """Choose the wheel correction from the current line sensor readings."""
         ol, il, ir_, orr = s
         if il and ir_:
             drive(k * C.BASE_SPEED, k * C.BASE_SPEED)
@@ -69,14 +72,17 @@ class Follower:
 
 
 def outers_clear(s):
+    """Return whether both outer line sensors are clear."""
     return not s[0] and not s[3]
 
 
 def all_black(s):
+    """Return whether all line sensors read zero."""
     return not any(s)
 
 
 def middles_on(s):
+    """Return whether both middle sensors see the line."""
     return s[1] and s[2]
 
 
@@ -114,11 +120,7 @@ def identify(first):
 
 
 def reverse_to_junction(target="LEFT"):
-    """Stop if the selected outer is already on; otherwise reverse until it is.
-
-    LEFT checks OL only, RIGHT checks OR only. The opposite outer and middle
-    sensors do not gate detection. No forward recovery or creep is performed.
-    """
+    """Reverse until the selected outer sensor detects a junction."""
     if target not in ("LEFT", "RIGHT", "BOTH"):
         raise ValueError("Unknown reverse target: %s" % target)
     start = ticks_ms()
@@ -140,6 +142,7 @@ def reverse_to_junction(target="LEFT"):
 
 
 def drive_until(cond, speed=C.CREEP_SPEED, timeout_ms=None):
+    """Drive until the condition is met or the timeout expires."""
     n = 0
     start = ticks_ms()
     while ticks_diff(ticks_ms(), start) < (timeout_ms or C.CLEAR_TIMEOUT_MS):
@@ -185,9 +188,7 @@ def spin_until_middles_on(t0, earliest, latest, rack_entry=False):
 
 
 def find_line():
-    """Both middles off the line after a timed turn: sweep left up to LINE_SWEEP_MS, then right
-    up to twice that, stopping as soon as both middles are on the line (LINE_CONFIRM reads).
-    If it never finds it, it stops back where it started."""
+    """Search for the line after a turn."""
     t0 = ticks_ms()
     for direction, ms in ((-1, C.LINE_SWEEP_MS), (1, 2 * C.LINE_SWEEP_MS), (-1, C.LINE_SWEEP_MS)):
         spin(direction)
@@ -205,9 +206,7 @@ def find_line():
 
 
 def follow_for(ms, why="advance", stop_at_end=False, speed=C.CREEP_SPEED):
-    """Follow the line at speed (default CREEP_SPEED) for ms, ignoring junctions, then carry on.
-    False if the line is lost. stop_at_end: return "END" as soon as the line runs out (both
-    middles off), like PLACE."""
+    """Follow the line for a set time."""
     if ms <= 0:
         return True
     f = Follower()
@@ -228,8 +227,7 @@ def follow_for(ms, why="advance", stop_at_end=False, speed=C.CREEP_SPEED):
 
 
 def advance_over_junction():
-    """Milestone 1 advance: drive straight at CREEP_SPEED for ADVANCE_MS (no line following)
-    so the axle ends up over the junction before spinning."""
+    """Drive straight over the junction."""
     if C.ADVANCE_FOLLOW_LINE:
         return follow_for(C.ADVANCE_MS, "advance")
     drive(C.CREEP_SPEED, C.CREEP_SPEED)
@@ -265,12 +263,7 @@ def turn(direction, advance=True, rack_entry=False):
 
 
 def rack_exit_turn(direction):
-    """Turn onto the main line; stop on both middles, ignoring both outers.
-
-    Require departure from the starting line to avoid accepting the junction
-    before the turn. Do not impose a calibrated minimum or drive forward to
-    clear outers: an outer already on may be the next rack junction.
-    """
+    """Turn from a rack stub onto the main line."""
     if not advance_over_junction():
         return False
     t0 = ticks_ms()
@@ -300,14 +293,12 @@ def spin_back_to_line(direction, ms):
 
 
 def half_turn_ms():
-    """LEFT 180 deg turn time. Its own measured value, not derived from the 90 deg ones
-    (a turn's time isn't proportional to its angle: the motors take time to get going)."""
+    """Return the configured half-turn duration."""
     return C.TURN_180_MS
 
 
 def timed_180(where):
-    """Spin LEFT with no line check for that place's 180 deg time (TURN_180_BAY_MS or
-    TURN_180_RACK_MS, else TURN_180_MS)."""
+    """Run the configured timed half-turn."""
     ms = {"bay": C.TURN_180_BAY_MS, "rack": C.TURN_180_RACK_MS}.get(where) or half_turn_ms()
     spin(-1)
     wait_ms(ms)
@@ -315,8 +306,7 @@ def timed_180(where):
 
 
 def checked_half_turn():
-    """Half-turn on the spot over black table: stop when the middles find the line
-    within +/-TURN_TOLERANCE of the expected time. Fail if no line is confirmed."""
+    """Turn until the line is confirmed."""
     half = C.CHECKED_HALF_TURN_MS or half_turn_ms()
     lo, hi = int(half * (1 - C.TURN_TOLERANCE)), int(half * (1 + C.TURN_TOLERANCE))
     t0 = ticks_ms()
@@ -328,6 +318,7 @@ def checked_half_turn():
 
 # ---------------- Actions -------------------------------------------------------------------
 def arm_ready():
+    """Put the arm in its ready-to-pick-up position."""
     stop()
     hw.grabber.set_angle(C.GRABBER_OPEN)
     hw.lift.set_angle(C.LIFT_BOTTOM)
@@ -336,11 +327,7 @@ def arm_ready():
 
 
 def pickup():
-    """Milestone 2 pickup: creep into the loading box, close the gripper, read the
-    magnet and show red/green, lift, move on to the far edge of the box, timed half-turn,
-    drive back out.
-    The creep stops after PICKUP_FORWARD_MS (or at the far edge of the box, if sooner), so
-    the package isn't pushed along. Pickup is attempted without a bay package-sensor check."""
+    """Pick up a package and identify its pole."""
     if C.PICKUP_FORWARD_MS is None:
         if not drive_until(all_black):
             return False
@@ -385,9 +372,7 @@ def release_at_bay():
 
 
 def ramp_straight():
-    """Up the ramp for RAMP_STRAIGHT_MS with junctions ignored (the reflective ramp tape looks
-    like a line): blind and straight, or following the line with the middle sensors if
-    RAMP_FOLLOW_LINE. Then find the centre line again if the middles are off it."""
+    """Drive straight up the ramp and find the centre line."""
     if C.RAMP_FOLLOW_LINE:
         if not follow_for(C.RAMP_STRAIGHT_MS, "ramp", speed=C.RAMP_SPEED):
             return find_line()
@@ -400,12 +385,11 @@ def ramp_straight():
 
 
 def scan_slot():
-    """Bay-sensor readings straight ahead and SLOT_SCAN_STEPS small turns to each side of it, in
-    case the robot stopped a few degrees crooked in the stub (2 Nov: a crooked stop read 157 mm
-    with a box there). Ends pointing the way it started. Returns (nearest mm or None, readings)."""
+    """Scan a rack slot and return the nearest reading."""
     vals = []
 
     def look():
+        """Wait for the sensor to settle, then read the slot distance."""
         sleep_ms(C.DIST_SETTLE_MS)
         vals.append(hw.dist_bay.read_mm(C.SLOT_SCAN_SAMPLES))
 
@@ -421,10 +405,7 @@ def scan_slot():
 
 
 def check_slot(deck="lower"):
-    """Survey: just turned into a rack stub. Follow SLOT_CHECK[deck] advance_ms up it, stop, scan
-    the bay sensor a little left and right (scan_slot): nearest reading below occupied_mm =
-    occupied. Then turn round in the stub (stopping on the stub line).
-    Returns "OCCUPIED" or "EMPTY" (False if the turn round lost the line)."""
+    """Check whether a rack slot is occupied."""
     cfg = C.SLOT_CHECK[deck]
     if not follow_for(cfg["advance_ms"], "slot check advance"):
         return False
@@ -446,9 +427,7 @@ def raise_lift():
 
 
 def rack_approach(deck="lower"):
-    """Just turned into a rack stub: follow RACK_RAISE_AT_MS up it, stop and raise the lift
-    for placement (on the top deck it is already raised, from the hub). No sensor check: the
-    slot was picked from the used list."""
+    """Approach the rack slot and raise the lift."""
     if not follow_for(C.RACK_RAISE_AT_MS[deck], "rack approach"):
         return False
     return raise_lift()
@@ -464,8 +443,7 @@ def drive_for(direction, ms):
 
 
 def place():
-    """Release at the rack: open, back off so the jaws clear the package, close them and
-    push the package into the rack, then reverse and make a timed half-turn. Pole LEDs off."""
+    """Place the package in the rack."""
     stop()
     sleep_ms(100)
     hw.grabber.set_angle(C.GRABBER_OPEN)
@@ -548,16 +526,13 @@ NO_COOLDOWN = ("LEFT_IN_PLACE", "RIGHT_IN_PLACE", "ARM_READY", "RAISE_LIFT", "WA
 
 # ---------------- Route runner (milestone 2 main loop) -----------------------------------------
 def _route_fail(title, reason, step, route, t0):
+    """Log a route failure and stop the robot."""
     stop()
     return False
 
 
 def run_route(route, title):
-    """Run (event, action, note[, timeout_ms]) steps.
-    BACK_LEFT/RIGHT checks the selected outer immediately, reversing only if
-    needed. It then acts without forward identification creep or cooldown.
-    Returns True (done), False (failed), or "OCCUPIED" / "EMPTY" from a slot check (the robot
-    has turned round in the stub; the rest of the route is not run)."""
+    """Run navigation steps and return the result."""
     f = Follower()
     step = hits = line_end = 0
     seen_line = False

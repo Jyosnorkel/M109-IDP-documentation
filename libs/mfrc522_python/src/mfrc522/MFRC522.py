@@ -103,12 +103,7 @@ class MFRC522:
     serNum = []
 
     def __init__(self, i2c_bus=0, i2c_address=MFRC522_addr, debugLevel='WARNING'):
-        """
-        Initializes the MFRC522 RFID reader.
-
-        Args:
-        - bus (int): the SPI bus number (default 0).
-        """
+        """Initialize the RFID reader."""
         # Store I2C
         self.i2c_bus = i2c_bus
         self.i2c_address = i2c_address
@@ -122,67 +117,29 @@ class MFRC522:
         self.Init()
 
     def Reset(self):
-        """
-        Reset the MFRC522 chip by writing the PCD_RESETPHASE command to the CommandReg register.
-
-        This function sends the PCD_RESETPHASE command to the MFRC522 chip, which resets its internal state
-        and clears all registers. After the reset, the chip is ready to accept new commands.
-        """
+        """Reset the RFID reader."""
 
         self.WriteReg(self.CommandReg, self.PCD_RESETPHASE)
 
     def WriteReg(self, addr, val):
-        """
-        Write a value to a register of the MFRC522 chip using I2C communication.
-
-        This method sends a write command to the MFRC522 chip using the I2C interface, specifying the
-        register address and the value to be written.
-
-        Args:
-            :param: (int): the address of the register to write to, in the range 0x00-0xFF.
-            val (int): the value to write to the register, in the range 0x00-0xFF.
-        """
+        """Write a value to a reader register."""
         self.i2c_bus.writeto(self.i2c_address, bytearray([addr, val]))
 
     def ReadReg(self, addr):
-        """
-        Read the value of a register of the MFRC522 chip using I2C communication.
-
-        This method sends a read command to the MFRC522 chip using the I2C interface, specifying the
-        register address.
-
-        Args:
-            addr (int): the address of the register to read from, in the range 0x00-0xFF.
-
-        Returns:
-            The value read from the register.
-        """
+        """Read a value from a reader register."""
 
         self.i2c_bus.writeto(self.i2c_address, bytearray([addr]))
         val = self.i2c_bus.readfrom(self.i2c_address, 1)
         return int.from_bytes(val)
 
     def Close(self):
-        """
-        Close the MFRC522 chip by releasing the SPI interface and cleaning up the GPIO.
-
-        This method closes the SPI interface used to communicate with the MFRC522 chip, releasing any
-        system resources associated with it. It also calls the `GPIO.cleanup()` function to release
-        any GPIO pins that were used to control the chip.
-        """
+        """Close the reader interface."""
         #self.spi.close()
         #GPIO.cleanup()
         pass
 
     def SetBitMask(self, reg, mask):
-        """
-        Sets specific bits in a register of an MFRC522 RFID module
-        by performing a bitwise OR operation with the provided mask.
-
-        Args:
-            reg (int): the register to modify
-            mask (int): the bit mask to apply
-        """
+        """Set bits in a reader register."""
         # Read the current value of the register
         tmp = self.ReadReg(reg)
 
@@ -190,14 +147,7 @@ class MFRC522:
         self.WriteReg(reg, tmp | mask)
 
     def ClearBitMask(self, reg, mask):
-        """
-        Clears specific bits in a register of an MFRC522 RFID module
-        by performing a bitwise AND operation with the complement of the provided mask.
-
-        Args:
-            reg (int): the register to modify
-            mask (int): the bit mask to clear
-        """
+        """Clear bits in a reader register."""
         # Read the current value of the register
         tmp = self.ReadReg(reg)
 
@@ -205,12 +155,7 @@ class MFRC522:
         self.WriteReg(reg, tmp & (~mask))
 
     def AntennaOn(self):
-        """
-        Turns on the antenna of an MFRC522 RFID module by setting the TxControlReg register.
-
-        If the antenna is already on, this method does nothing.
-
-        """
+        """Turn the RFID antenna on."""
         # Read the current value of the TxControlReg register
         temp = self.ReadReg(self.TxControlReg)
 
@@ -228,19 +173,7 @@ class MFRC522:
         self.ClearBitMask(self.TxControlReg, 0x03)
 
     def MFRC522_ToCard(self, command, sendData):
-        """
-        Executes a command on the MFRC522 and communicates with the tag or card.
-
-        Args:
-            command (int): The command to execute.
-            sendData (list): A list of bytes to send to the tag or card.
-
-        Returns:
-            tuple: A tuple containing:
-                - status (int): The status of the command execution.
-                - backData (list): A list of bytes received from the tag or card.
-                - backLen (int): The length of the backData list.
-        """
+        """Send a command to a card and return its response."""
         backData = []  # List to store response data
         backLen = 0  # Length of response data
         status = self.MI_ERR  # Default status
@@ -323,17 +256,7 @@ class MFRC522:
         return (status, backData, backLen)
 
     def Request(self, reqMode):
-        """
-        Sends a request command to a tag or card to initiate communication.
-
-        Args:
-            reqMode (int): The request mode to send.
-
-        Returns:
-            tuple: A tuple containing:
-                - status (int): The status of the command execution.
-                - backBits (int): The number of bits received from the tag or card.
-        """
+        """Request a response from a nearby card."""
         status = None
         backBits = None
         TagType = []
@@ -357,14 +280,7 @@ class MFRC522:
         return (status, backBits)
 
     def Anticoll(self):
-        """
-        Sends an anticollision command/Performs an anticollision algorithm to a tag or card to prevent multiple tags from responding.
-
-        Returns:
-            tuple: A tuple containing:
-                - uid (list): The unique identifier of the tag or card.
-                - size (int): The size of the UID in bits.
-        """
+        """Resolve card collisions and read the card UID."""
         backData = []
         serNumCheck = 0
 
@@ -403,15 +319,7 @@ class MFRC522:
         return (status, backData)
 
     def CalulateCRC(self, pIndata):
-        """
-        Calculates the CRC value for the given input data using the MFRC522 chip.
-
-        Args:
-            pIndata (list): A list of integers representing the input data for which to calculate the CRC.
-
-        Returns:
-            A list of two integers representing the calculated CRC value.
-        """
+        """Calculate a CRC for the supplied data."""
 
         # Clear the CRC IRQ flag and set the FIFO level to maximum.
         self.ClearBitMask(self.DivIrqReg, 0x04)
@@ -439,15 +347,7 @@ class MFRC522:
         return pOutData
 
     def SelectTag(self, serNum):
-        """
-        Selects a tag or card for communication.
-
-        Args:
-            uid (list): The unique identifier of the tag or card.
-
-        Returns:
-            int: The status of the command execution (1 or 0).
-        """
+        """Select a card by its UID."""
         # Initialize empty lists for the response data and the data buffer
         backData = []
         buf = []
@@ -479,18 +379,7 @@ class MFRC522:
             return 0
 
     def Authenticate(self, authMode, BlockAddr, Sectorkey, serNum):
-        """
-        Authenticates a tag or card for a specific block.
-
-        Args:
-            authMode (int): The authentication mode to use.
-            blockAddr (int): The address of the block to authenticate.
-            sectorKey (list): The key of the sector to authenticate.
-            uid (list): The unique identifier of the tag or card.
-
-        Returns:
-            The status of the authentication.
-        """
+        """Authenticate a card block."""
         buff = []
 
         # First byte should be the authMode (A or B)
@@ -526,15 +415,7 @@ class MFRC522:
         self.ClearBitMask(self.Status2Reg, 0x08)
 
     def ReadTag(self, blockAddr):
-        """
-        Reads data from a specific block of a RFID card.
-
-        Args:
-            blockAddr (int): The block address of the RFID card to read from.
-
-        Returns:
-            If the read is successful and the received data is of the correct length, the function returns the received data as a list of 16 bytes. If the read is unsuccessful or the received data is of incorrect length, the function returns None.
-        """
+        """Read data from a card block."""
 
         # create an array containing the READ command and the block address to be read
         recvData = []
@@ -561,16 +442,7 @@ class MFRC522:
             raise ValueError(f"Invalid length {len(BackData)}")
 
     def WriteTag(self, blockAddr, writeData):
-        """
-        Writes data to a specified block address in the RFID tag.'
-
-        Args:
-            blockAddr (int): The block address where data needs to be written
-            writeData (list): A list of 16 bytes of data to be written to the block
-
-        Returns:
-            None
-        """
+        """Write data to a card block."""
 
         # The buffer to be sent to the tag for writing data
         buff = []

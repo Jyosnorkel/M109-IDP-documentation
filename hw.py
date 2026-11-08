@@ -8,6 +8,7 @@ class Motor:
     """TB6612FNG channel, course test_motor.py convention: dir 0 = forward, 1 kHz PWM."""
 
     def __init__(self, dir_pin, pwm_pin, reversed=False):
+        """Set up the motor direction pin and PWM output."""
         self.dir = Pin(dir_pin, Pin.OUT)
         self.pwm = PWM(Pin(pwm_pin))
         self.pwm.freq(1000)
@@ -15,12 +16,14 @@ class Motor:
         self.off()
 
     def set(self, speed):
+        """Set the motor speed and direction."""
         speed = max(-100, min(100, speed))
         forward = (speed >= 0) != self.reversed
         self.dir.value(0 if forward else 1)
         self.pwm.duty_u16(int(65535 * abs(speed) / 100))
 
     def off(self):
+        """Turn this motor off."""
         self.pwm.duty_u16(0)
 
 
@@ -38,6 +41,7 @@ _stop = {"requested": False, "armed_at": None}
 
 
 def _stop_irq(pin):
+    """Record an armed stop-button press and stop both motors."""
     a = _stop["armed_at"]
     if a is None or ticks_diff(ticks_ms(), a) < 0:
         return
@@ -48,6 +52,7 @@ def _stop_irq(pin):
 
 
 def pressed():
+    """Return whether the start/stop button is pressed."""
     return button.value() == C.BUTTON_PRESSED
 
 
@@ -70,17 +75,20 @@ def arm_stop_button():
 
 
 def check_stop():
+    """Raise StopRequested when a stop has been requested."""
     if _stop["requested"]:
         stop()
         raise StopRequested()
 
 
 def stop():
+    """Stop both motors."""
     left.off()
     right.off()
 
 
 def drive(l_speed, r_speed):
+    """Drive both motors at the requested speeds."""
     check_stop()
     if l_speed > 0 and r_speed > 0:    # trim forward driving only (milestone 2); spins untouched
         l_speed *= C.LEFT_TRIM
@@ -119,15 +127,18 @@ class Servo:
     MAX_DUTY = 8192
 
     def __init__(self, pin_no):
+        """Set up PWM control for the servo."""
         self.servo = PWM(Pin(pin_no))
         self.servo.freq(50)
         self.last_angle = None
 
     def _command(self, angle):
+        """Send an angle command to the servo."""
         self.servo.duty_u16(int(self.MIN_DUTY + angle / 270 * (self.MAX_DUTY - self.MIN_DUTY)))
         self.last_angle = angle
 
     def set_angle(self, angle):
+        """Move the servo to the requested angle in small steps."""
         angle = max(0, min(270, angle))
         if self.last_angle is None:     # unknown start position: go straight there
             self._command(angle)
@@ -148,6 +159,7 @@ class Lights:
     """Amber: off in the start box, flashing while running. Red = north, green = south."""
 
     def __init__(self):
+        """Set up the status LEDs and amber flash timer."""
         self.amber = Pin(C.LED_AMBER_PIN, Pin.OUT)
         self.red = Pin(C.LED_RED_PIN, Pin.OUT)
         self.green = Pin(C.LED_GREEN_PIN, Pin.OUT)
@@ -157,14 +169,17 @@ class Lights:
         self.pole(None)
 
     def _toggle(self, _t):
+        """Toggle the amber LED."""
         self.amber.value(1 - self.amber.value())
 
     def flash(self):
+        """Start flashing the amber LED."""
         if not self.flashing:
             self.timer.init(period=C.FLASH_MS, mode=Timer.PERIODIC, callback=self._toggle)
             self.flashing = True
 
     def off(self):
+        """Stop flashing and turn the amber LED off."""
         self.timer.deinit()
         self.flashing = False
         self.amber.value(1 - C.LED_ON)
@@ -184,6 +199,7 @@ _hall = {"base": None}
 
 
 def hall_avg(n=C.HALL_SAMPLES):
+    """Return the average of several Hall sensor readings."""
     total = 0
     for _ in range(n):
         total += hall.read_u16()
@@ -213,6 +229,7 @@ class Distance:
     """VL53L0X on its own I2C bus, continuous mode. Needs libs/VL53L0X/VL53L0X.py."""
 
     def __init__(self, bus, sda, scl):
+        """Start continuous distance readings from the VL53L0X sensor."""
         from libs.VL53L0X.VL53L0X import VL53L0X
         self.tof = VL53L0X(I2C(bus, sda=Pin(sda), scl=Pin(scl)))
         self.tof.start()
@@ -230,6 +247,7 @@ class Distance:
 
 
 def _make_distance(cfg):
+    """Create the configured distance sensor, or return None if it is unavailable."""
     if cfg is None:
         return None
     try:
@@ -246,4 +264,5 @@ ir = Pin(C.IR_PIN, Pin.IN, Pin.PULL_UP) if C.IR_PIN is not None else None
 
 
 def ir_active():
+    """Return whether the traffic-light receiver sees its active signal."""
     return ir is not None and ir.value() == C.IR_ACTIVE

@@ -16,9 +16,11 @@ class TinyCodeReader:
     TINY_CODE_READER_I2C_BYTE_COUNT = struct.calcsize(TINY_CODE_READER_I2C_FORMAT)
 
     def __init__(self, i2c_bus):
+        """Store the I2C bus used by the code reader."""
         self.i2c_bus = i2c_bus
 
     def poll(self):
+        """Read and decode a code, or return None if no code is ready."""
         read_data = self.i2c_bus.readfrom(TinyCodeReader.TINY_CODE_READER_I2C_ADDRESS,
                                           TinyCodeReader.TINY_CODE_READER_I2C_BYTE_COUNT)
 

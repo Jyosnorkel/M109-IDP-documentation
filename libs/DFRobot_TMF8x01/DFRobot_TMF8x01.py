@@ -103,6 +103,7 @@ class DFRobot_TMF8x01:
   last_operate_status = STA_OK
   
   def __init__(self, i2c_bus, i2c_address, fw_fname):
+    """Set up the sensor bus, address, and firmware file."""
     self.i2c_bus = i2c_bus
     self.i2c_address = i2c_address
     self.fw_fname = fw_fname
@@ -110,10 +111,7 @@ class DFRobot_TMF8x01:
       self.i2c_bus.start()
 
   def begin(self):
-    '''!
-      @brief    initialization sensor's interface, addr, ram config to running APP0 application.
-      @return   initialization sucess return 0, fail return -1
-    '''
+    """Initialize the sensor and start its application."""
     self._initialize = False
     self.sleep()
     self._write_bytes(self.REG_MTF8x01_ENABLE, [0x01])
@@ -134,9 +132,7 @@ class DFRobot_TMF8x01:
     return 0
 
   def sleep(self):
-    '''!
-      @brief  sleep sensor by software, the sensor enter sleep mode(bootloader). Need to call wakeup function to wakeup sensor to enter APP0
-    '''
+    """Put the sensor into sleep mode."""
     rslt = self._read_bytes(self.REG_MTF8x01_ENABLE,1)
     rslt[0] = rslt[0] |  (1 << 7)
     self._write_bytes(self.REG_MTF8x01_ENABLE, rslt)
@@ -144,10 +140,7 @@ class DFRobot_TMF8x01:
     self._count = 0
   
   def wakeup(self):
-    '''!
-      @brief  wakeup device from sleep mode, it will running app0.
-      @return enter app0 return true, or return false.
-    '''
+    """Wake the sensor and start its application."""
     self._write_bytes(self.REG_MTF8x01_ENABLE, [0x01])
     if(self._wait_for_cpu_ready() != True):
       return False
@@ -166,14 +159,7 @@ class DFRobot_TMF8x01:
     return True
 
   def get_unique_id(self): 
-    '''!
-      @brief get a unique number of sensor .Each sensor has a unique identifier.
-      @return return 4bytes unique number:
-      @n  the byte0 of return: serial_number_0
-      @n  the byte1 of return: serial_number_1
-      @n  the byte2 of return: identification_number_1
-      @n  the byte2 of return: identification_number_0
-    '''
+    """Return the sensor unique ID."""
     self._write_bytes(self.REG_MTF8x01_COMMAND, [0x47])
     rslt = [0]
     waitForTimeOutMs = 0.1
@@ -190,13 +176,7 @@ class DFRobot_TMF8x01:
     return 0
 
   def get_sensor_model(self): 
-    '''!
-      @brief get sensor's model.
-      @return return a String:
-      @n  TMF8801: the sensor is TMF8801
-      @n  TMF8701: the sensor is TMF8701
-      @n  unknown : unknown device
-    '''
+    """Return the sensor model."""
     rslt = self.get_unique_id()
     rslt = (rslt >> 16)&0xFFFF
     str1 = f"unknown ({hex(rslt)})"
@@ -207,11 +187,7 @@ class DFRobot_TMF8x01:
     return str1
 
   def get_software_version(self): 
-    '''!
-      @brief get software version of patch.
-      @return return string of device software version,format:
-      @n major.minor.patch numbers.chip id version
-    '''
+    """Return the sensor software version."""
     str1 = ""
     rslt = self._read_bytes(self.REG_MTF8x01_VERSION_MAJOR, 1)
     lin = "%X"%rslt[0]
@@ -231,10 +207,7 @@ class DFRobot_TMF8x01:
     return str1
 
   def get_calibration_data(self): 
-    '''!
-      @brief  Get 14 bytes of calibration data.
-      @return return 14 bytes of calibration data.
-    '''
+    """Return the sensor calibration data."""
     #print("get_calibration_data %d"%self._initialize)
     rslt = []
     if(self._initialize == False):
@@ -253,17 +226,14 @@ class DFRobot_TMF8x01:
       return list()
 
   def set_calibration_data(self, l): 
-    '''!
-      @brief  set 14 bytes of calibration data.
-      @param l The list of 14 bytes calibration data.
-      @return set sucess return true, or return false.
-    '''
+    """Set the sensor calibration data."""
     if len(l) != 14:
       return False
     TMF8801_CALIB_DATA = l
     return True
 
   def _set_caibration_mode(self, calib_m = eMODE_CALIB): 
+    """Set the sensor calibration mode."""
     if self._initialize == False:
       print("self._initialize == False")
       return
@@ -299,9 +269,7 @@ class DFRobot_TMF8x01:
     
 
   def stop_measurement(self):
-    '''!
-      @brief  disable measurement config.
-    '''
+    """Stop distance measurements."""
     self._measure_cmd_flag = False
     self._write_bytes(self.REG_MTF8x01_COMMAND, [0xff])
     utime_sleep(0.05)#s 50ms
@@ -310,10 +278,7 @@ class DFRobot_TMF8x01:
     self._tid = 0
 
   def is_data_ready(self):
-    '''!
-      @brief  Waiting for data ready.
-      @return if data is valid, return true, or return false.
-    '''
+    """Check whether a measurement is ready."""
     i = 0
     t = time()
     self.result_dict = dict(zip(self.result_dictKey, self._read_bytes(self.REG_MTF8x01_STATUS, 11)))
@@ -351,10 +316,7 @@ class DFRobot_TMF8x01:
     return False
 
   def get_distance_mm(self):
-    '''!
-      @brief  get distance, unit mm. Before using this function, you need to call is_data_ready.
-      @return return distance value, unit mm.
-    '''
+    """Return the measured distance in millimetres."""
     rslt = self.result_dict["disH"] << 8 | self.result_dict["disL"]
     dis = rslt * self._timestamp
     if self._measure_cmd_set[self.CMDSET_INDEX_CMD6] & (1<<self.CMDSET_BIT_INT):
@@ -365,25 +327,17 @@ class DFRobot_TMF8x01:
     return int(dis)
 
   def enable_int_pin(self):
-    '''!
-      @brief  enable INT pin. If you call this function,which will report a interrupt.
-      @n signal to host by INT pin when measure data is ready.
-    '''
+    """Enable the data-ready interrupt pin."""
     self._write_bytes(self.REG_MTF8x01_INT_ENAB,[0x01])
     self._modify_cmd_set(self.CMDSET_INDEX_CMD6,self.CMDSET_BIT_INT, True)
 
   def disable_int_pin(self):
-    '''!
-      @brief disable INT pin.
-    '''
+    """Disable the data-ready interrupt pin."""
     self._write_bytes(self.REG_MTF8x01_INT_ENAB,[0])
     self._modify_cmd_set(self.CMDSET_INDEX_CMD6,self.CMDSET_BIT_INT, False)
 
   def power_on(self):
-    '''!
-      @brief power on sensor when power down sensor by EN pin.
-      @return sucess return True, or return False
-    '''
+    """Power on the sensor."""
     if self._initialize == False:
       return False
     if (self._en < 0):
@@ -399,10 +353,7 @@ class DFRobot_TMF8x01:
     return True
 
   def power_down(self):
-    '''!
-      @brief power down sensor by EN pin.
-      @return sucess return True, or return False
-    '''
+    """Power down the sensor."""
     if self._initialize == False:
       return False
     if (self._en < 0):
@@ -410,17 +361,11 @@ class DFRobot_TMF8x01:
     return True
 
   def get_i2c_address(self):
-    '''!
-      @brief get I2C address.
-      @return return 7 bits I2C address
-    '''
+    """Return the sensor I2C address."""
     return self.i2c_address
 
   def get_junction_temperature_C(self):
-    '''!
-      @brief get junction temperature of sensor.
-      @return Junction temperature of sensor, unit, Celsius.
-    '''
+    """Return the sensor junction temperature."""
     temp = self._read_bytes(self.REG_MTF8x01_TJ, 1)
 
     if temp[0] & 0x80:
@@ -430,10 +375,7 @@ class DFRobot_TMF8x01:
     
 
   def _download_ram_patch(self):
-    '''
-      @brief  download RAM patch.
-      @return download sucess return True, or return False
-    '''
+    """Download the firmware patch to the sensor."""
     if self._get_app_id() != 0x80:
       if(self._load_bootloader() != True):
         raise RuntimeError("load Bootloader failed")
@@ -544,6 +486,7 @@ class DFRobot_TMF8x01:
     return True
 
   def _get_calibration_mode(self):
+    """Return the active calibration mode."""
     mode = 0
     if(self._measure_cmd_set[self.CMDSET_INDEX_CMD7] & (1<< self.CMDSET_BIT_CALIB)):
       mode = 1
@@ -552,10 +495,7 @@ class DFRobot_TMF8x01:
     return mode
 
   def _load_application(self):
-    '''!
-       @brief set cpu to run APP0.
-       @return if APP0 is running return True, or return False
-    '''
+    """Start the sensor application."""
     self._write_bytes(self.REG_MTF8x01_APPREQID,[0xC0])
     if self._waitForApplication() == True:
       return True
@@ -563,10 +503,7 @@ class DFRobot_TMF8x01:
       return False
 
   def _load_bootloader(self):
-    '''!
-       @brief set cpu to run Bootloader.
-       @return if Bootloader is running return True, or return False
-    '''
+    """Start the sensor bootloader."""
     self._write_bytes(self.REG_MTF8x01_APPREQID,[0x80])
     if self._wait_for_bootloader() == True:
       return True
@@ -574,10 +511,7 @@ class DFRobot_TMF8x01:
       return False
 
   def _waitForApplication(self):
-    '''!
-       @brief Waiting for APP0 is running.
-       @return APP0 is running in 100 ms return True, or return False
-    '''
+    """Wait for the sensor application to start."""
     waitForTimeOutMs = 0.1
     waitForTimeoutIncMs = 0.005
     t = 0
@@ -591,10 +525,7 @@ class DFRobot_TMF8x01:
     return False
 
   def _wait_for_bootloader(self):
-    '''!
-       @brief Waiting for Bootloader is running.
-       @return Bootloader is running in 100 ms return True, or return False
-    '''
+    """Wait for the sensor bootloader to start."""
     waitForTimeOutMs = 0.1
     waitForTimeoutIncMs = 0.005
     t = 0
@@ -606,10 +537,7 @@ class DFRobot_TMF8x01:
     return False
 
   def _wait_for_cpu_ready(self):
-    '''!
-       @brief Waiting for CPU is ready.
-       @return CPU is ready in 100 ms return True, or return False
-    '''
+    """Wait for the sensor CPU to become ready."""
     waitForTimeOutMs = 0.1
     waitForTimeoutIncMs = 0.005
     t = 0
@@ -623,12 +551,7 @@ class DFRobot_TMF8x01:
     return False
 
   def _modify_cmd_set(self, index, bit, val):
-    '''!
-      @brief modify array measurement cmd, _measure_cmd_set.
-      @param index The index of array _measure_cmd_set,the range is 0~8
-      @param bit The bit of one byte, the range is 0~7
-      @param val True or False. The val of one byte's bit,false set bit to 0, true set bit to 1.
-    '''
+    """Set or clear a bit in the measurement command."""
     if ((index > (len(self._measure_cmd_set) - 1)) or (bit > 7)):
       return
     if val == True:
@@ -637,14 +560,17 @@ class DFRobot_TMF8x01:
       self._measure_cmd_set[index] = ~((~self._measure_cmd_set[index]) | (1 << bit))
 
   def _get_cpu_state(self):
+    """Return the sensor CPU state."""
     rslt = self._read_bytes(self.REG_MTF8x01_ENABLE,1)
     return rslt[0]
 
   def _get_app_id(self):
+    """Return the running application ID."""
     rslt = self._read_bytes(self.REG_MTF8x01_APPID,1)
     return rslt[0]
 
   def _cal_check_sum(self, l):
+    """Calculate the checksum for calibration data."""
     sum = 0
     for i in l:
       sum += i
@@ -652,6 +578,7 @@ class DFRobot_TMF8x01:
     return sum
 
   def _read_status_ack(self):
+    """Read the sensor status and acknowledgement bytes."""
     rslt = self._read_bytes(0x08,3)
     s = rslt[0] | (rslt[1] << 8) | (rslt[2] << 16)
     if(s == 0xFF0000):
@@ -660,13 +587,12 @@ class DFRobot_TMF8x01:
     return False
 
   def _stop_command(self):
-    '''!
-      @brief  stop command.
-    '''
+    """Stop the current sensor command."""
     self._write_bytes(self.REG_MTF8x01_COMMAND, [0xff])
     utime_sleep(0.1)#s 50ms
 
   def _checkStatusRegister(self, value):
+    """Wait for the status register to reach the requested value."""
     waitForTimeOutMs = 1
     waitForTimeoutIncMs = 0.005
     t = 0
@@ -682,6 +608,7 @@ class DFRobot_TMF8x01:
     return False
 
   def _write_bytes(self, reg, buf):
+    """Write a sequence of bytes to the sensor."""
     self.last_operate_status = self.STA_ERR_DEVICE_NOT_DETECTED
     try:
       data = bytearray([reg] + buf)
@@ -693,6 +620,7 @@ class DFRobot_TMF8x01:
       raise
 
   def _read_bytes(self, reg, len1):
+    """Read a sequence of bytes from the sensor."""
     self.last_operate_status = self.STA_ERR_DEVICE_NOT_DETECTED
     try:
       self.i2c_bus.writeto(self.i2c_address, bytearray([reg]))
@@ -709,47 +637,27 @@ class DFRobot_TMF8x01:
 
 class DFRobot_TMF8801(DFRobot_TMF8x01):
   def __init__(self, i2c_bus, i2c_address=0x41):
+    """Set up the TMF8801 sensor and its default calibration data."""
     self._calib_data = [0x41,0x57,0x01,0xFD,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x04]
     self._algo_state_data = [0xB1, 0xA9, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     self._measure_cmd_set = [0x01, 0xA3, 0x00, 0x00,0x00, 0x64, 0x03, 0x84, 0x02]
     DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/libs/DFRobot_TMF8x01/fw/TMF8801/main_app_3v3_k2.hex")
   
   def start_measurement(self, calib_m):
-    '''!
-    @brief Config measurement params to enable measurement. Need to call stop_measurement to stop ranging action.
-    @param calib_m: Is an enumerated variable, which is to config measurement cailibration mode.
-    @n     eMODE_NO_CALIB  :          Measuring without any calibration data.
-    @n     eMODE_CALIB    :          Measuring with calibration data.
-    @n     eMODE_CALIB_AND_ALGOSTATE : Measuring with calibration and algorithm state.
-    @return status:
-    @n      false:  enable measurement failed.
-    @n      true:  enable measurement sucess.
-    '''
+    """Start distance measurements."""
     return self._set_caibration_mode(calib_m)
 
 
 class DFRobot_TMF8701(DFRobot_TMF8x01):
   def __init__(self, i2c_bus, i2c_address=0x41):
+    """Set up the TMF8701 sensor and its default calibration data."""
     self._calib_data = [0x41,0x57,0x01,0xFD,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x04]
     self._algo_state_data = [0xB1, 0xA9, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     self._measure_cmd_set = [0x01, 0xA3, 0x00, 0x00,0x00, 0x64, 0x03, 0x84, 0x02]
     DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/libs/DFRobot_TMF8x01/fw/TMF8701/main_app_3v3_k2.hex")
 
   def start_measurement(self, calib_m, mode):
-    '''
-    @brief Config measurement params to enable measurement. Need to call stop_measurement to stop ranging action.
-    @param calib_m: Is an enumerated variable , which is to config measurement cailibration mode.
-    @n     eMODE_NO_CALIB  :          Measuring without any calibration data.
-    @n     eMODE_CALIB    :          Measuring with calibration data.
-    @n     eMODE_CALIB_AND_ALGOSTATE : Measuring with calibration and algorithm state.
-    @param mode : the ranging mode of TMF8701 sensor.
-    @n     ePROXIMITY: Raing in PROXIMITY mode,ranging range 0~10cm
-    @n     eDISTANCE: Raing in distance mode,ranging range 10~60cm
-    @n     eCOMBINE:  Raing in PROXIMITY and DISTANCE hybrid mode,ranging range 0~60cm
-    @return status:
-    @n      false:  enable measurement failed.
-    @n      true:  enable measurement sucess.
-    '''
+    """Start distance measurements."""
     if mode == self.ePROXIMITY:
       self._modify_cmd_set(self.CMDSET_INDEX_CMD6,self.CMDSET_BIT_PROXIMITY,True)
       self._modify_cmd_set(self.CMDSET_INDEX_CMD6,self.CMDSET_BIT_DISTANCE,False)

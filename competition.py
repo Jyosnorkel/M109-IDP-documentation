@@ -22,15 +22,18 @@ class BayPlan:
     """Attempt each configured bay once per competition run, in configured order."""
 
     def __init__(self):
+        """Create an empty record of visited bays."""
         self.visited = set()
 
     def peek(self, side=None):
+        """Return the next unvisited bay without marking it visited."""
         for bay_side, far in C.BAY_ORDER:
             if (side is None or bay_side == side) and (bay_side, far) not in self.visited:
                 return bay_side, far
         return None
 
     def next(self, side=None):
+        """Mark and return the next unvisited bay."""
         bay = self.peek(side)
         if bay is not None:
             self.visited.add(bay)
@@ -43,11 +46,13 @@ class SlotPlan:
     is neither, i.e. the empty slot the survey found (slots after it are unchecked)."""
 
     def __init__(self):
+        """Create empty used and occupied flags for the rack slots."""
         self.used = {(rack, deck): [False] * C.SLOTS_PER_RACK
                      for rack in ("A", "B") for deck in ("lower", "upper")}
         self.occupied = {area: [False] * C.SLOTS_PER_RACK for area in self.used}
 
     def next(self, rack, deck):
+        """Return the first slot that is neither used nor occupied."""
         used, occ = self.used[(rack, deck)], self.occupied[(rack, deck)]
         for i in range(len(used)):
             if not used[i] and not occ[i]:
@@ -55,18 +60,16 @@ class SlotPlan:
         return None
 
     def mark_used(self, rack, deck, slot):
+        """Mark a slot as used after delivery."""
         self.used[(rack, deck)][slot - 1] = True
 
     def mark_occupied(self, rack, deck, slot):
+        """Mark a slot as occupied after a survey check."""
         self.occupied[(rack, deck)][slot - 1] = True
 
 
 def survey(slots, areas=None, position=None, return_to_hub=True):
-    """No package yet: for each area in SURVEY_ORDER, check slots 1, 2, 3 ... with the bay sensor
-    until one is empty, marking the full ones occupied. areas defaults to SURVEY_ORDER.
-    position is shared mission state containing the last completed node. Mission phases
-    leave the robot at their last checked slot; standalone surveys return to the hub.
-    Returns {area: empty slot or None}, or False if a route failed (robot lost)."""
+    """Survey rack areas until an empty slot is found."""
     found = {}
     if position is None:
         position = {"node": "hub"}
@@ -101,9 +104,7 @@ def survey(slots, areas=None, position=None, return_to_hub=True):
 
 
 def deliver(side, far, slots):
-    """Robot in the bay, turned outward and holding a package. Take it to the next slot and
-    release it. Returns (label, deck, slot) with the robot turned round in the rack stub,
-    or None if that failed."""
+    """Deliver a held package to the next available rack slot."""
     pole = nav.state["pole"]
     if pole not in ("N", "S"):
         return None
@@ -122,6 +123,8 @@ def deliver(side, far, slots):
 
 
 def mission():
+    # Start from a known state and calibrate the hall sensor with the gripper closed.
+    """Run the rack survey, pickups, deliveries, and return to the hub."""
     hw.stop()
     hw.lights.off()
     hw.lights.pole(None)
@@ -133,13 +136,17 @@ def mission():
     hw.wait_press()
     hw.arm_stop_button()
     hw.lights.flash()
+    # Start the run clock after the start button is pressed.
     t0 = ticks_ms()
+
+    # Track which bays and rack slots are used, and where the robot is on the course.
     slots = SlotPlan()
     bays = BayPlan()
     delivered = trips = 0
     max_trips = C.MAX_TRIPS
 
     position = {"node": "hub"}
+    # Slot checks need the distance sensor; skip the survey if it is disabled or unavailable.
     survey_enabled = C.SURVEY and hw.dist_bay is not None
 
     # Zero-trip mode: survey only.
@@ -148,6 +155,7 @@ def mission():
         survey(slots, areas=lower_areas, position=position)
 
     finished = max_trips == 0
+    # Work through the right side and rack B, then the left side and rack A.
     for side, rack in (("R", "B"), ("L", "A")):
         if finished or (max_trips is not None and trips >= max_trips):
             break
@@ -157,12 +165,14 @@ def mission():
             break
 
         if survey_enabled:
+            # Find the first empty lower slot before collecting packages on this side.
             found = survey(slots, areas=((side, "lower"),),
                            position=position, return_to_hub=False)
             if found is False:
                 break
 
         while bays.peek(side) is not None:
+            # Stop before starting another pickup if the trip limit or time cutoff is reached.
             if max_trips is not None and trips >= max_trips:
                 finished = True
                 break
@@ -172,14 +182,17 @@ def mission():
             _, far = bays.next(side)
             trips += 1
             bay = G.BAY_NAMES[(side, far)]
+            # Head to the next bay from the last known position, ready for pickup.
             pickup_route = [("NOW", "ARM_READY", "gripper open, lift down")]
             pickup_route += G.track.to_route(position["node"], bay)
             res = nav.run_route(pickup_route, position["node"] + " -> " + bay)
             if res is not True or not nav.state["holding"]:
+                # A failed route or pickup leaves the robot's position uncertain.
                 position["node"] = None
                 finished = True
                 break
             position["node"] = bay
+            # Deliver to the next available slot and save the rack position for the next route.
             got = deliver(side, far, slots)
             if not got:
                 position["node"] = None
@@ -198,12 +211,14 @@ def mission():
         else:
             position["node"] = "hub"
 
+    # Leave the motors and status lights off when the mission ends.
     hw.stop()
     hw.lights.pole(None)
     hw.lights.off()
 
 
 def run():
+    """Run the mission and leave the hardware stopped when it ends."""
     try:
         mission()
     except Exception:

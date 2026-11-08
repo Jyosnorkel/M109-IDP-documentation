@@ -109,6 +109,7 @@ class TimeoutError(RuntimeError):
 
 class VL53L0X:
     def __init__(self, i2c, address=0x29):
+        """Set up the sensor over I2C."""
         self.i2c = i2c
         self.address = address
         self.init()
@@ -132,6 +133,7 @@ class VL53L0X:
         self.vcsel_period_type = ["VcselPeriodPreRange", "VcselPeriodFinalRange"]
 
     def _registers(self, register, values=None, struct='B'):
+        """Read or write a sequence of sensor registers."""
         if values is None:
             size = ustruct.calcsize(struct)
             data = self.i2c.readfrom_mem(self.address, register, size)
@@ -141,11 +143,13 @@ class VL53L0X:
         self.i2c.writeto_mem(self.address, register, data)
 
     def _register(self, register, value=None, struct='B'):
+        """Read or write one sensor register."""
         if value is None:
             return self._registers(register, struct=struct)[0]
         self._registers(register, (value,), struct=struct)
 
     def _flag(self, register=0x00, bit=0, value=None):
+        """Read or set a bit in a sensor register."""
         data = self._register(register)
         mask = 1 << bit
         if value is None:
@@ -157,10 +161,12 @@ class VL53L0X:
         self._register(register, data)
 
     def _config(self, *config):
+        """Write a list of register values to the sensor."""
         for register, value in config:
             self._register(register, value)
 
     def init(self, power2v8=True):
+        """Initialize and calibrate the distance sensor."""
         self._flag(_EXTSUP_HV, 0, power2v8)
 
         # I2C standard mode
@@ -322,6 +328,7 @@ class VL53L0X:
         self._register(_SYSTEM_SEQUENCE, 0xe8)
 
     def _spad_info(self):
+        """Read the available SPAD count and aperture type."""
         self._config(
             (0x80, 0x01),
             (0xff, 0x01),
@@ -366,6 +373,7 @@ class VL53L0X:
         return count, is_aperture
 
     def _calibrate(self, vhv_init_byte):
+        """Run the sensor reference calibration."""
         self._register(_SYSRANGE_START, 0x01 | vhv_init_byte)
         for timeout in range(_IO_TIMEOUT):
             if self._register(_RESULT_INTERRUPT_STATUS) & 0x07:
@@ -377,6 +385,7 @@ class VL53L0X:
         self._register(_SYSRANGE_START, 0x00)
 
     def start(self, period=0):
+        """Start continuous distance measurements."""
         self._config(
             (0x80, 0x01),
             (0xFF, 0x01),
@@ -397,6 +406,7 @@ class VL53L0X:
         self._started = True
 
     def stop(self):
+        """Stop continuous distance measurements."""
         self._register(_SYSRANGE_START, 0x01)
         self._config(
             (0xFF, 0x01),
@@ -408,6 +418,7 @@ class VL53L0X:
         self._started = False
 
     def read(self):
+        """Read one distance measurement in millimetres."""
         if not self._started:
             self._config(
                 (0x80, 0x01),
@@ -436,18 +447,22 @@ class VL53L0X:
         return value
 
     def set_signal_rate_limit(self, limit_Mcps):
+        """Set the minimum signal rate for valid measurements."""
         if limit_Mcps < 0 or limit_Mcps > 511.99:
             return False
         self._register(0x44, limit_Mcps * (1 << 7))
         return True
 
     def decode_Vcsel_period(self, reg_val):
+        """Convert an encoded VCSEL period to clock cycles."""
         return (((reg_val) + 1) << 1)
 
     def encode_Vcsel_period(self, period_pclks):
+        """Encode a VCSEL period in clock cycles."""
         return (((period_pclks) >> 1) - 1)
 
     def set_Vcsel_pulse_period(self, type, period_pclks):
+        """Set a VCSEL pulse period and update sensor timing."""
         vcsel_period_reg = self.encode_Vcsel_period(period_pclks)
 
         self.get_sequence_step_enables()
@@ -529,6 +544,7 @@ class VL53L0X:
         return True
 
     def get_sequence_step_enables(self):
+        """Read which measurement sequence steps are enabled."""
         sequence_config = self._register(0x01)
 
         self.enables["tcc"] = (sequence_config >> 4) & 0x1
@@ -538,6 +554,7 @@ class VL53L0X:
         self.enables["final_range"] = (sequence_config >> 7) & 0x1
 
     def get_vcsel_pulse_period(self, type):
+        """Return the VCSEL pulse period for the requested type."""
         if type == self.vcsel_period_type[0]:
             return self.decode_Vcsel_period(0x50)
         elif type == self.vcsel_period_type[1]:
@@ -546,6 +563,7 @@ class VL53L0X:
             return 255
 
     def get_sequence_step_timeouts(self):
+        """Read the timeout settings for each measurement step."""
         self.timeouts["pre_range_vcsel_period_pclks"] = self.get_vcsel_pulse_period(self.vcsel_period_type[0])
         self.timeouts["msrc_dss_tcc_mclks"] = int(self._register(MSRC_CONFIG_TIMEOUT_MACROP)) + 1
         self.timeouts["msrc_dss_tcc_us"] = self.timeout_Mclks_to_microseconds(self.timeouts["msrc_dss_tcc_mclks"],
@@ -565,20 +583,25 @@ class VL53L0X:
                                                                                  "final_range_vcsel_period_pclks"])
 
     def timeout_Mclks_to_microseconds(self, timeout_period_mclks, vcsel_period_pclks):
+        """Convert sensor clock cycles to microseconds."""
         macro_period_ns = self.calc_macro_period(vcsel_period_pclks)
         return ((timeout_period_mclks * macro_period_ns) + (macro_period_ns / 2)) / 1000
 
     def timeout_microseconds_to_Mclks(self, timeout_period_us, vcsel_period_pclks):
+        """Convert microseconds to sensor clock cycles."""
         macro_period_ns = self.calc_macro_period(vcsel_period_pclks)
         return (((timeout_period_us * 1000) + (macro_period_ns / 2)) / macro_period_ns)
 
     def calc_macro_period(self, vcsel_period_pclks):
+        """Calculate the sensor macro period."""
         return (((2304 * (vcsel_period_pclks) * 1655) + 500) / 1000)
 
     def decode_timeout(self, reg_val):
+        """Decode a sensor timeout value."""
         return ((reg_val & 0x00FF) << ((reg_val & 0xFF00) >> 8)) + 1
 
     def encode_timeout(self, timeout_mclks):
+        """Encode a timeout in sensor clock cycles."""
         timeout_mclks = int(timeout_mclks)
         ls_byte = 0
         ms_byte = 0
@@ -594,6 +617,7 @@ class VL53L0X:
             return 0
 
     def set_measurement_timing_budget(self, budget_us):
+        """Set the sensor measurement timing budget in microseconds."""
         start_overhead = 1320
         end_overhead = 960
         msrc_overhead = 660
@@ -634,6 +658,7 @@ class VL53L0X:
         return True
 
     def perform_single_ref_calibration(self, vhv_init_byte):
+        """Run a single reference calibration."""
         self._register(SYSRANGE_START, 0x01|vhv_init_byte)
         chrono_start = utime.ticks_ms()
         while self._register((RESULT_INTERRUPT_STATUS & 0x07) == 0):

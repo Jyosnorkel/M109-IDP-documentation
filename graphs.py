@@ -12,6 +12,7 @@ BAY_NAMES = {("R", False): "loading area 3", ("R", True): "loading area 4",
 
 
 def rack_node(side, deck, slot):
+    """Build a rack label from its side, deck, and slot number."""
     if side not in ("L", "R") or deck not in ("lower", "upper"):
         raise ValueError("Unknown rack area")
     if not 1 <= slot <= C.SLOTS_PER_RACK:
@@ -25,6 +26,7 @@ class TrackGraph:
     OPPOSITE = {"up": "down", "right": "left", "down": "up", "left": "right"}
 
     def __init__(self):
+        """Build the track graph and mark its rack nodes."""
         self.graph = {}
         self.racks = {}
         self.upper_junctions = set()
@@ -55,20 +57,24 @@ class TrackGraph:
 
     @property
     def start_exits(self):
+        """Return the exits from the hub by direction."""
         return {direction: node for node, direction in self.graph["hub"].items()}
 
     def link(self, a, b, direction):
+        """Connect two nodes in the track graph."""
         if direction not in self.OPPOSITE:
             raise ValueError("Unknown direction: %s" % direction)
         self.graph.setdefault(a, {})[b] = direction
         self.graph.setdefault(b, {})[a] = self.OPPOSITE[direction]
 
     def chain(self, nodes, direction):
+        """Connect each neighbouring pair of nodes in one direction."""
         for a, b in zip(nodes, nodes[1:]):
             self.link(a, b, direction)
 
     @classmethod
     def get_turn(cls, heading, direction):
+        """Return the turn needed to face an exit."""
         if heading not in cls.DIRECTIONS or direction not in cls.DIRECTIONS:
             raise ValueError("Unknown heading or direction")
         difference = (cls.DIRECTIONS.index(direction) - cls.DIRECTIONS.index(heading)) % 4
@@ -97,6 +103,7 @@ class TrackGraph:
         raise ValueError("No route from %s to %s" % (start, destination))
 
     def plan(self, start, destination, heading="up"):
+        """Plan a path and turns from the start to the destination."""
         path = self.find_route(start, destination)
         self.get_turn(heading, heading)
         steps = []
@@ -108,6 +115,7 @@ class TrackGraph:
         return {"path": path, "steps": steps, "heading": heading}
 
     def expected_event(self, node, heading):
+        """Return the line event expected at this node and heading."""
         if node in self.upper_junctions:
             return C.DECK_EVENT
         turns = {self.get_turn(heading, direction) for direction in self.graph[node].values()}
@@ -121,14 +129,7 @@ class TrackGraph:
         raise ValueError("No detectable side branch at %s" % node)
 
     def to_route(self, start, destination, holding=False):
-        """Translate a path into nav.run_route actions.
-
-        Rack destinations stop just inside their stub: append CHECK_SLOT or
-        slot_visit(). Bay arrival performs PICKUP. Hub arrival parks facing up.
-        Painted start-box edges and the ramp are physical markers, not nodes.
-        RACK_EXIT turns stop on both middles without clearing the outers.
-        BACK_LEFT/RIGHT then checks one outer and reverses only if it is off.
-        """
+        """Convert a track path into navigation steps."""
         path = self.find_route(start, destination)
         if len(path) == 1:
             raise ValueError("Already at %s" % destination)
@@ -195,49 +196,61 @@ track = TrackGraph()
 
 
 def mirror(route):
+    """Swap left and right actions in a route."""
     def swap(text):
+        """Swap left and right words in a route action."""
         return text.replace("LEFT", "#").replace("RIGHT", "LEFT").replace("#", "RIGHT")
     return [(swap(s[0]), swap(s[1])) + tuple(s[2:]) for s in route]
 
 
 def for_side(route, side):
+    """Mirror a route for the left side of the track."""
     return route if side == "R" else mirror(route)
 
 
 def hub_to_bay(far):
+    """Build a route from the hub to a right-side bay."""
     return [("NOW", "ARM_READY", "gripper open, lift down")] + track.to_route("hub", BAY_NAMES[("R", far)])
 
 
 def bay_to_hub(far):
+    """Build a route from a right-side bay back to the hub."""
     return track.to_route(BAY_NAMES[("R", far)], "hub")
 
 
 def bay_to_lower_entry(far, slot):
+    """Build a route from a right-side bay to a lower rack slot."""
     return track.to_route(BAY_NAMES[("R", far)], rack_node("R", "lower", slot))
 
 
 def hub_to_lower_entry(slot):
+    """Build a route from the hub to a lower rack slot."""
     return track.to_route("hub", rack_node("R", "lower", slot))
 
 
 def lower_exit(slot):
+    """Build a route from a lower rack slot to the hub."""
     return track.to_route(rack_node("R", "lower", slot), "hub")
 
 
 def lower_to_far_bay(slot):
+    """Build a route from a lower rack slot to the far right bay."""
     return [("NOW", "ARM_READY", "gripper open, lift down")] + track.to_route(
         rack_node("R", "lower", slot), BAY_NAMES[("R", True)])
 
 
 def hub_to_upper_entry(slot, holding=True):
+    """Build a route from the hub to an upper rack slot."""
     return track.to_route("hub", rack_node("R", "upper", slot), holding=holding)
 
 
 def upper_exit(slot):
+    """Build a route from an upper rack slot back to the hub."""
     return track.to_route(rack_node("R", "upper", slot), "hub")
 
 
 def slot_visit(deck="lower"):
+    """Build the actions for approaching, placing at, and leaving a rack slot."""
     left = C.RACK_TIMEOUT_MS - C.RACK_RAISE_AT_MS[deck]
     approach = "RACK_APPROACH" if deck == "lower" else "RACK_APPROACH_UPPER"
     return [("NOW", approach, "part way up the stub: stop, raise the lift"),
@@ -256,12 +269,15 @@ def survey_to(start, side, deck, slot):
 
 
 def survey_check(deck, slot):
+    """Build a survey route from the hub to a rack slot."""
     return survey_to("hub", "R", deck, slot)
 
 
 def survey_next(deck, slot):
+    """Build a survey route from the previous slot to the next one."""
     return survey_to(rack_node("R", deck, slot - 1), "R", deck, slot)
 
 
 def survey_back(deck, slot):
+    """Build a route from a surveyed rack slot back to the hub."""
     return track.to_route(rack_node("R", deck, slot), "hub")
