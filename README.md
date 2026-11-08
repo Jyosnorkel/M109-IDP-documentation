@@ -10,10 +10,10 @@ The mission code is in `competition.py`. `main.py` is the power-up entry point; 
 
 - `main.py` starts the competition run.
 - `competition.py` runs the mission: rack survey, package pickup, delivery, and return to the hub.
-- `config.py` holds the pin assignments and settings for motors, turns, sensors, and the mission.
-- `nav.py` handles line following, turns, pickup and placement actions, and route execution.
 - `graphs.py` describes the track and plans routes between bays, racks, and the hub.
+- `nav.py` handles line following, turns, pickup and placement actions, and route execution.
 - `hw.py` controls the motors, servos, lights, buttons, and sensors.
+- `config.py` holds the pin assignments and settings for motors, turns, sensors, and the mission.
 
 ## Sensor libraries
 
@@ -27,6 +27,6 @@ The mission code is in `competition.py`. `main.py` is the power-up entry point; 
 ## To run it
 
 1. Check that the pins and settings in `config.py` match the robot.
-2. Copy the project Python files and `libs/` folder to the Pico.
-3. Put the robot at the hub facing the ramp and power it on. Press the start button when ready.
-4. Check the route, sensors, pickup, and rack placement on the course; adjust `config.py` if needed.
+2. Copy the project Python files and the `libs/` folder to the Pico.
+3. Put the robot at the hub, facing the ramp, and power it on. Press the start button when ready.
+4. Check the route, sensors, pickup, and rack placement on the course, then adjust `config.py` if needed.
